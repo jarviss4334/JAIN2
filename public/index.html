@@ -1,0 +1,358 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Private Chat</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* Header and 3D rotating KONA */
+    header {
+      background: linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045);
+      padding: 1rem;
+      text-align: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.7);
+      color: white;
+      user-select: none;
+    }
+
+    .rotating {
+      font-size: 3rem;
+      font-weight: 900;
+      animation: rotate3d 6s linear infinite;
+      perspective: 1000px;
+      display: inline-block;
+    }
+
+    @keyframes rotate3d {
+      0%   { transform: rotateX(0deg) rotateY(0deg); }
+      25%  { transform: rotateX(180deg) rotateY(0deg); }
+      50%  { transform: rotateX(180deg) rotateY(180deg); }
+      75%  { transform: rotateX(0deg) rotateY(180deg); }
+      100% { transform: rotateX(0deg) rotateY(0deg); }
+    }
+
+    /* Dark mode background and text */
+    body {
+      background-color: #121212;
+      color: #eee;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Layout adjustments */
+    #sidebar {
+      background-color: #1e1e1e;
+      color: #ccc;
+      width: 220px;
+      padding: 1rem;
+      box-sizing: border-box;
+      overflow-y: auto;
+    }
+
+    #main {
+      background-color: #181818;
+      color: #eee;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 1rem;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    #chatArea {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    #header {
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #333;
+      margin-bottom: 0.5rem;
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 10px;
+    }
+
+    /* Messages styling */
+    .msg {
+      margin-bottom: 12px;
+      max-width: 70%;
+      padding: 0.5rem 0.7rem;
+      border-radius: 12px;
+      word-wrap: break-word;
+    }
+
+    .me {
+      background-color: #4a90e2;
+      color: white;
+      align-self: flex-end;
+      border-bottom-right-radius: 0;
+    }
+
+    .them {
+      background-color: #333;
+      color: #ddd;
+      align-self: flex-start;
+      border-bottom-left-radius: 0;
+    }
+
+    /* Composer styles */
+    #composer {
+      margin-top: 10px;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    input#msgInput {
+      flex: 1;
+      background-color: #222;
+      border: none;
+      border-radius: 6px;
+      color: #eee;
+      padding: 0.6rem 1rem;
+      font-size: 1rem;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    input#msgInput::placeholder {
+      color: #666;
+    }
+
+    button#sendBtn {
+      background-color: #4a90e2;
+      border: none;
+      border-radius: 6px;
+      padding: 0 1.2rem;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button#sendBtn:hover {
+      background-color: #357ABD;
+    }
+
+    /* Sidebar user list */
+    #users {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+
+    .user {
+      padding: 0.5rem 0.7rem;
+      cursor: default;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+    }
+
+    .small {
+      font-size: 0.75rem;
+      color: #999;
+    }
+
+    hr {
+      border-color: #333;
+      margin: 1rem 0;
+    }
+
+    /* Name modal styling */
+    #nameModal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+
+    #nameBox {
+      background: #222;
+      padding: 1.5rem 2rem;
+      border-radius: 12px;
+      width: 320px;
+      box-sizing: border-box;
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.1);
+      color: #eee;
+    }
+
+    #nameBox h3 {
+      margin-top: 0;
+      margin-bottom: 1rem;
+      font-weight: 700;
+      font-size: 1.5rem;
+      text-align: center;
+    }
+
+    #nameInput {
+      width: 100%;
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      border: none;
+      font-size: 1rem;
+      box-sizing: border-box;
+      background-color: #333;
+      color: #eee;
+      outline: none;
+    }
+
+    #pickBtn {
+      background-color: #4a90e2;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.2rem;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 1rem;
+      width: 100%;
+      transition: background-color 0.3s ease;
+    }
+
+    #pickBtn:hover {
+      background-color: #357ABD;
+    }
+
+    code {
+      background: #333;
+      padding: 0 4px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 class="rotating">KONA</h1>
+  </header>
+
+  <div style="display:flex; flex:1; height: calc(100vh - 80px);">
+    <div id="sidebar">
+      <h3>Users</h3>
+      <div id="users"></div>
+      <hr />
+      <div class="small">Connected users</div>
+    </div>
+
+    <div id="main">
+      <div id="chatArea">
+        <div id="header"><strong id="chatWith">Global Chat</strong></div>
+        <div id="messages"></div>
+        <div id="composer">
+          <input id="msgInput" placeholder="Type a message..." autocomplete="off" />
+          <button id="sendBtn">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="nameModal">
+    <div id="nameBox">
+      <h3>Pick a display name</h3>
+      <input id="nameInput" placeholder="Enter name (no password required)" autocomplete="off" />
+      <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+        <button id="pickBtn">Join</button>
+      </div>
+      <p class="small">Duplicates get suffix like <code>#2</code>.</p>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const nameModal = document.getElementById('nameModal');
+    const nameInput = document.getElementById('nameInput');
+    const pickBtn = document.getElementById('pickBtn');
+    const usersDiv = document.getElementById('users');
+    const messagesDiv = document.getElementById('messages');
+    const chatWith = document.getElementById('chatWith');
+    const msgInput = document.getElementById('msgInput');
+    const sendBtn = document.getElementById('sendBtn');
+
+    let my = { id: null, name: null };
+
+    // Render user list simply as names
+    function renderUsers(list) {
+      usersDiv.innerHTML = '';
+      list.forEach(name => {
+        const el = document.createElement('div');
+        el.className = 'user';
+        el.textContent = name + (name === my.name ? ' (you)' : '');
+        usersDiv.appendChild(el);
+      });
+    }
+
+    // Render messages in the global chat
+    function renderMessage(msg) {
+      const d = document.createElement('div');
+      d.className = 'msg ' + (msg.username === my.name ? 'me' : 'them');
+      const t = new Date(msg.ts);
+      d.innerHTML = `<div style="font-size:12px; color:#bbb;"><strong>${msg.username}</strong> <span class="small">${t.toLocaleTimeString()}</span></div><div>${escapeHtml(msg.text)}</div>`;
+      messagesDiv.appendChild(d);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    sendBtn.onclick = () => {
+      const text = msgInput.value.trim();
+      if (!text) return;
+      socket.emit('chat:message', text);
+      msgInput.value = '';
+    };
+
+    msgInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendBtn.click();
+    });
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    }
+
+    socket.on('connect', () => {
+      my.id = socket.id;
+    });
+
+    socket.on('users:update', renderUsers);
+
+    socket.on('chat:message', (msg) => {
+      renderMessage(msg);
+    });
+
+    pickBtn.onclick = () => {
+      const name = (nameInput.value || '').trim();
+      if (!name) return;
+      socket.emit('user:join', name, (res) => {
+        if (res?.ok) {
+          my.name = res.assignedName;
+          nameModal.style.display = 'none';
+          document.title = `${my.name} — Chat`;
+          chatWith.textContent = 'Global Chat';
+        }
+      });
+    };
+
+    nameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') pickBtn.click();
+    });
+
+    nameInput.focus();
+  </script>
+</body>
+</html>
