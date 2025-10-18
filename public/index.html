@@ -1,121 +1,125 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FREE KONA Chat</title>
-  <link rel="stylesheet" href="style.css" />
-  <script src="/socket.io/socket.io.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat App</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <h1>FREE KONA</h1>
+    <div class="rotating">FREE KONA</div>
   </header>
 
-  <div style="display: flex; flex: 1; overflow: hidden;">
-    <aside id="sidebar">
-      <h3>Online Users</h3>
-      <hr />
-      <div id="users"></div>
-    </aside>
-
-    <main id="main">
-      <div id="chatArea">
-        <div id="header">Global Chat</div>
-        <div id="messages"></div>
-        <div id="composer">
-          <input id="msgInput" type="text" placeholder="Type a message..." autocomplete="off" />
-          <button id="sendBtn">Send</button>
-        </div>
+  <div id="main">
+    <div id="chatArea">
+      <div id="header">Global Chat</div>
+      <div id="messages"></div>
+      <div id="composer">
+        <input type="text" id="msgInput" placeholder="Type a message..." />
+        <button id="sendBtn">Send</button>
       </div>
-    </main>
-  </div>
-
-  <!-- Name selection modal -->
-  <div id="nameModal">
-    <div id="nameBox">
-      <h3>Enter your name</h3>
-      <input id="nameInput" type="text" placeholder="Your name..." />
-      <button id="pickBtn">Join</button>
     </div>
   </div>
 
+  <div id="nameModal">
+    <div id="nameBox">
+      <h3>Enter your name</h3>
+      <input type="text" id="nameInput" placeholder="Your name" />
+      <button id="pickBtn">Join Chat</button>
+    </div>
+  </div>
+
+  <div id="roomModal">
+    <div id="roomBox">
+      <h3>Create or Join Room</h3>
+      <button id="createRoomBtn">Create Room</button>
+      <div id="joinRoom">
+        <input type="text" id="roomCodeInput" placeholder="Enter Room Code" />
+        <button id="joinRoomBtn">Join Room</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
+    const msgInput = document.getElementById('msgInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const messages = document.getElementById('messages');
     const nameModal = document.getElementById('nameModal');
     const nameInput = document.getElementById('nameInput');
     const pickBtn = document.getElementById('pickBtn');
-    const msgInput = document.getElementById('msgInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const messagesDiv = document.getElementById('messages');
-    const usersDiv = document.getElementById('users');
+    const roomModal = document.getElementById('roomModal');
+    const createRoomBtn = document.getElementById('createRoomBtn');
+    const joinRoomBtn = document.getElementById('joinRoomBtn');
+    const roomCodeInput = document.getElementById('roomCodeInput');
+    let currentRoom = 'global';
 
-    let my = { name: null };
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
+    function addMessage(msg) {
+      const msgEl = document.createElement('div');
+      msgEl.classList.add('msg', msg.system ? 'system' : msg.username === 'You' ? 'me' : 'them');
+      msgEl.innerHTML = `<strong>${msg.username}</strong>: ${msg.text}`;
+      messages.appendChild(msgEl);
+      messages.scrollTop = messages.scrollHeight;
     }
 
-    pickBtn.onclick = () => {
-      const desiredName = nameInput.value.trim();
-      if (!desiredName) return;
-      socket.emit('user:join', desiredName, (res) => {
-        if (res.ok) {
-          my.name = res.assignedName;
-          nameModal.style.display = 'none';
+    socket.on('chat:message', addMessage);
+
+    socket.on('users:update', (users) => {
+      // Update user list if needed
+    });
+
+    pickBtn.addEventListener('click', () => {
+      const name = nameInput.value.trim();
+      if (name) {
+        socket.emit('user:join', name, (response) => {
+          if (response.ok) {
+            nameModal.style.display = 'none';
+            roomModal.style.display = 'block';
+          }
+        });
+      }
+    });
+
+    sendBtn.addEventListener('click', () => {
+      const text = msgInput.value.trim();
+      if (text) {
+        socket.emit('chat:message', text, currentRoom !== 'global' ? currentRoom : null);
+        msgInput.value = '';
+      }
+    });
+
+    createRoomBtn.addEventListener('click', () => {
+      socket.emit('room:create', (response) => {
+        if (response.ok) {
+          currentRoom = response.roomCode;
+          roomModal.style.display = 'none';
+          document.getElementById('header').textContent = `Room ${currentRoom}`;
+          document.body.style.backgroundImage = 'url("https://files.catbox.moe/1juetm.jpg")';
         }
       });
-    };
-
-    sendBtn.onclick = sendMessage;
-    msgInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') sendMessage();
     });
 
-    function sendMessage() {
-      const text = msgInput.value.trim();
-      if (!text) return;
-      socket.emit('chat:message', text);
-      msgInput.value = '';
-    }
-
-    function renderMessage(msg) {
-      const d = document.createElement('div');
-      d.className = 'msg ' + (msg.username === my.name ? 'me' : 'them') + ' wobble ripple';
-      const t = new Date(msg.ts);
-
-      if (msg.system) {
-        d.innerHTML = `<div class="small" style="text-align:center;color:#fcb045;"><em>${escapeHtml(msg.text)}</em></div>`;
-      } else {
-        d.innerHTML = `
-          <div style="font-size:12px; color:#bbb;">
-            <strong>${escapeHtml(msg.username)}</strong>
-            <span class="small">${t.toLocaleTimeString()}</span>
-          </div>
-          <div>${escapeHtml(msg.text)}</div>`;
+    joinRoomBtn.addEventListener('click', () => {
+      const roomCode = roomCodeInput.value.trim();
+      if (roomCode) {
+        socket.emit('room:join', roomCode, (response) => {
+          if (response.ok) {
+            currentRoom = roomCode;
+            roomModal.style.display = 'none';
+            document.getElementById('header').textContent = `Room ${currentRoom}`;
+            document.body.style.backgroundImage = 'url("https://files.catbox.moe/1juetm.jpg")';
+          } else {
+            alert(response.error);
+          }
+        });
       }
-
-      messagesDiv.appendChild(d);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-
-      d.addEventListener('animationend', () => {
-        d.classList.remove('wobble', 'ripple');
-      });
-    }
-
-    socket.on('chat:message', renderMessage);
-
-    socket.on('users:update', (list) => {
-      usersDiv.innerHTML = '';
-      list.forEach((u) => {
-        const div = document.createElement('div');
-        div.className = 'user';
-        div.textContent = u;
-        usersDiv.appendChild(div);
-      });
     });
+
+    // Initial setup
+    nameModal.style.display = 'block';
+    roomModal.style.display = 'none';
   </script>
 </body>
 </html>
