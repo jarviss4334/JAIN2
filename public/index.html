@@ -1,125 +1,254 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chat App</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FREE KONA Chat</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
   <header>
-    <div class="rotating">FREE KONA</div>
+    <h1 id="brand">FREE KONA</h1>
+    <div id="top-left-control" class="glow-3d" aria-hidden="false">
+      <button id="privateRoomBtn" class="glow-btn">Private Room</button>
+    </div>
   </header>
 
-  <div id="main">
-    <div id="chatArea">
-      <div id="header">Global Chat</div>
-      <div id="messages"></div>
-      <div id="composer">
-        <input type="text" id="msgInput" placeholder="Type a message..." />
-        <button id="sendBtn">Send</button>
+  <div id="app">
+    <aside id="sidebar">
+      <h3>Users</h3>
+      <div id="users"></div>
+      <hr />
+      <div class="small">Connected users</div>
+    </aside>
+
+    <main id="main">
+      <div id="chatArea">
+        <div id="header"><strong id="chatTitle">Global Chat</strong></div>
+        <div id="messages" aria-live="polite"></div>
+
+        <div id="composer">
+          <input id="msgInput" placeholder="Type a message..." autocomplete="off" />
+          <button id="sendBtn">Send</button>
+        </div>
       </div>
-    </div>
+    </main>
   </div>
 
-  <div id="nameModal">
-    <div id="nameBox">
-      <h3>Enter your name</h3>
-      <input type="text" id="nameInput" placeholder="Your name" />
-      <button id="pickBtn">Join Chat</button>
-    </div>
-  </div>
-
-  <div id="roomModal">
-    <div id="roomBox">
-      <h3>Create or Join Room</h3>
-      <button id="createRoomBtn">Create Room</button>
-      <div id="joinRoom">
-        <input type="text" id="roomCodeInput" placeholder="Enter Room Code" />
-        <button id="joinRoomBtn">Join Room</button>
+  <!-- Name modal (first thing shown) -->
+  <div id="nameModal" class="modal">
+    <div class="modal-box">
+      <h3>Pick a display name</h3>
+      <input id="nameInput" placeholder="Enter name (no password required)" autocomplete="off" />
+      <div class="modal-actions">
+        <button id="pickBtn" class="primary">Join</button>
       </div>
+      <p class="small">Duplicates get a suffix like <code>#2</code>.</p>
     </div>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
+  <!-- Room panel (shown after name) -->
+  <div id="roomPanel" class="panel hidden">
+    <div class="panel-content">
+      <button id="createRoom" class="panel-btn">Create Room</button>
+      <div class="join-inline">
+        <input id="joinCodeInput" placeholder="Enter room code" />
+        <button id="joinRoom" class="panel-btn">Join</button>
+      </div>
+      <div id="createdCode" class="small muted"></div>
+      <button id="leaveRoom" class="panel-btn danger hidden">Leave Room</button>
+    </div>
+  </div>
+
   <script>
+    // --- Basic DOM refs ---
     const socket = io();
-    const msgInput = document.getElementById('msgInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const messages = document.getElementById('messages');
     const nameModal = document.getElementById('nameModal');
     const nameInput = document.getElementById('nameInput');
     const pickBtn = document.getElementById('pickBtn');
-    const roomModal = document.getElementById('roomModal');
-    const createRoomBtn = document.getElementById('createRoomBtn');
-    const joinRoomBtn = document.getElementById('joinRoomBtn');
-    const roomCodeInput = document.getElementById('roomCodeInput');
-    let currentRoom = 'global';
 
-    function addMessage(msg) {
-      const msgEl = document.createElement('div');
-      msgEl.classList.add('msg', msg.system ? 'system' : msg.username === 'You' ? 'me' : 'them');
-      msgEl.innerHTML = `<strong>${msg.username}</strong>: ${msg.text}`;
-      messages.appendChild(msgEl);
-      messages.scrollTop = messages.scrollHeight;
+    const roomPanel = document.getElementById('roomPanel');
+    const createRoomBtn = document.getElementById('createRoom');
+    const joinRoomInput = document.getElementById('joinCodeInput');
+    const joinRoomBtn = document.getElementById('joinRoom');
+    const createdCodeDiv = document.getElementById('createdCode');
+    const leaveRoomBtn = document.getElementById('leaveRoom');
+
+    const privateRoomBtn = document.getElementById('privateRoomBtn');
+
+    const usersDiv = document.getElementById('users');
+    const messagesDiv = document.getElementById('messages');
+    const chatTitle = document.getElementById('chatTitle');
+    const msgInput = document.getElementById('msgInput');
+    const sendBtn = document.getElementById('sendBtn');
+
+    let my = { id: null, name: null };
+    let currentRoom = 'global'; // 'global' or code string/number
+
+    // --- Utility: escape to avoid XSS ---
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
     }
 
-    socket.on('chat:message', addMessage);
+    // --- Show/Hide helpers ---
+    function show(el){ el.classList.remove('hidden'); }
+    function hide(el){ el.classList.add('hidden'); }
 
-    socket.on('users:update', (users) => {
-      // Update user list if needed
-    });
+    // --- Render user list ---
+    function renderUsers(list){
+      usersDiv.innerHTML = '';
+      list.forEach(name => {
+        const d = document.createElement('div');
+        d.className = 'user' + (name === my.name ? ' you' : '');
+        d.textContent = name + (name === my.name ? ' (you)' : '');
+        usersDiv.appendChild(d);
+      });
+    }
 
-    pickBtn.addEventListener('click', () => {
-      const name = nameInput.value.trim();
-      if (name) {
-        socket.emit('user:join', name, (response) => {
-          if (response.ok) {
-            nameModal.style.display = 'none';
-            roomModal.style.display = 'block';
-          }
-        });
+    // --- Render single message with animations ---
+    function renderMessage(msg){
+      const mine = msg.username === my.name;
+      const d = document.createElement('div');
+      d.className = 'msg ' + (msg.system ? 'system' : (mine ? 'me' : 'them')) + ' wobble ripple';
+      const t = new Date(msg.ts || Date.now());
+
+      if (msg.system) {
+        d.innerHTML = `<div class="sys-text">${escapeHtml(msg.text)}</div>`;
+      } else {
+        d.innerHTML = `
+          <div class="meta"><strong>${escapeHtml(msg.username)}</strong> <span class="small">${t.toLocaleTimeString()}</span></div>
+          <div class="body">${escapeHtml(msg.text)}</div>
+        `;
       }
+
+      messagesDiv.appendChild(d);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+      // Remove animation classes after they finish so re-adding works later
+      d.addEventListener('animationend', () => {
+        d.classList.remove('wobble', 'ripple');
+      });
+    }
+
+    // --- Socket handlers ---
+    socket.on('connect', () => {
+      my.id = socket.id;
     });
 
-    sendBtn.addEventListener('click', () => {
-      const text = msgInput.value.trim();
-      if (text) {
-        socket.emit('chat:message', text, currentRoom !== 'global' ? currentRoom : null);
-        msgInput.value = '';
-      }
+    socket.on('users:update', (list) => renderUsers(list));
+
+    socket.on('chat:message', (msg) => {
+      renderMessage(msg);
     });
 
-    createRoomBtn.addEventListener('click', () => {
-      socket.emit('room:create', (response) => {
-        if (response.ok) {
-          currentRoom = response.roomCode;
-          roomModal.style.display = 'none';
-          document.getElementById('header').textContent = `Room ${currentRoom}`;
-          document.body.style.backgroundImage = 'url("https://files.catbox.moe/1juetm.jpg")';
+    // --- Name selection flow ---
+    pickBtn.onclick = () => {
+      const desired = (nameInput.value || '').trim();
+      if (!desired) return;
+      socket.emit('user:join', desired, (res) => {
+        if (res?.ok) {
+          my.name = res.assignedName;
+          hide(nameModal);
+          // show the room panel (top-left) with glowing 3D
+          show(roomPanel);
+          // also request current users list if not already sent
+          // server will send users:update on join
+        } else {
+          alert('Could not join — try another name.');
         }
       });
-    });
+    };
+    nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') pickBtn.click(); });
+    nameInput.focus();
 
-    joinRoomBtn.addEventListener('click', () => {
-      const roomCode = roomCodeInput.value.trim();
-      if (roomCode) {
-        socket.emit('room:join', roomCode, (response) => {
-          if (response.ok) {
-            currentRoom = roomCode;
-            roomModal.style.display = 'none';
-            document.getElementById('header').textContent = `Room ${currentRoom}`;
-            document.body.style.backgroundImage = 'url("https://files.catbox.moe/1juetm.jpg")';
-          } else {
-            alert(response.error);
-          }
-        });
+    // --- Sending messages ---
+    function sendMessage(){
+      const text = (msgInput.value || '').trim();
+      if (!text) return;
+      // send to room if not global
+      const payloadRoom = currentRoom === 'global' ? null : String(currentRoom);
+      socket.emit('chat:message', text, payloadRoom);
+      msgInput.value = '';
+    }
+    sendBtn.onclick = sendMessage;
+    msgInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
+
+    // --- Private room UI interactions ---
+    privateRoomBtn.onclick = () => {
+      // toggle panel visibility quickly for UX
+      roomPanel.classList.toggle('open');
+    };
+
+    createRoomBtn.onclick = () => {
+      socket.emit('room:create', (res) => {
+        if (res?.ok) {
+          currentRoom = String(res.roomCode);
+          chatTitle.textContent = `Room ${currentRoom}`;
+          createdCodeDiv.textContent = `Created room code: ${currentRoom}`;
+          // visually switch to room theme
+          document.body.classList.add('in-room');
+          document.body.style.backgroundImage = `url("https://files.catbox.moe/1juetm.jpg")`;
+          hide(leaveRoomBtn); // will show below after some time
+          show(leaveRoomBtn);
+          // announce to user
+          renderMessage({ username: 'System', text: `Room ${currentRoom} created. Share this code with others.`, ts: Date.now(), system: true });
+        } else {
+          alert('Could not create room. Try again.');
+        }
+      });
+    };
+
+    joinRoomBtn.onclick = () => {
+      const code = (joinRoomInput.value || '').trim();
+      if (!code) return;
+      socket.emit('room:join', code, (res) => {
+        if (res?.ok) {
+          currentRoom = String(code);
+          chatTitle.textContent = `Room ${currentRoom}`;
+          createdCodeDiv.textContent = `Joined room: ${currentRoom}`;
+          document.body.classList.add('in-room');
+          document.body.style.backgroundImage = `url("https://files.catbox.moe/1juetm.jpg")`;
+          show(leaveRoomBtn);
+          renderMessage({ username: 'System', text: `You joined room ${currentRoom}.`, ts: Date.now(), system: true });
+        } else {
+          alert(res?.error || 'Room not found.');
+        }
+      });
+    };
+
+    // Leave room -> go back to global
+    leaveRoomBtn.onclick = () => {
+      // simply leave the socket room client-side (server-side will clean user on disconnect)
+      // We'll inform the current room with a system message by sending a system-like message locally
+      renderMessage({ username: 'System', text: `You left room ${currentRoom}. Returning to Global Chat.`, ts: Date.now(), system: true });
+      currentRoom = 'global';
+      chatTitle.textContent = 'Global Chat';
+      document.body.classList.remove('in-room');
+      document.body.style.backgroundImage = '';
+      createdCodeDiv.textContent = '';
+      hide(leaveRoomBtn);
+    };
+
+    // Close room panel if clicked outside
+    document.addEventListener('click', (e) => {
+      if (!roomPanel.contains(e.target) && e.target !== privateRoomBtn) {
+        roomPanel.classList.remove('open');
       }
     });
 
-    // Initial setup
-    nameModal.style.display = 'block';
-    roomModal.style.display = 'none';
+    // --- Small accessibility: focus composer after joining ---
+    socket.on('connect', () => {
+      setTimeout(() => msgInput.focus(), 250);
+    });
+
+    // --- optional: show subtle welcome ---
+    // When page loads (before name), show nothing else; far later, users:update will populate.
   </script>
 </body>
 </html>
